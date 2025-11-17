@@ -28,7 +28,7 @@ export default function LandingPage() {
           Social Monitoring Made Simple
         </h1>
         <p className="mt-6 text-lg md:text-xl text-gray-300 max-w-3xl mx-auto">
-          Track brand keywords across YouTube, X, and Reddit with real-time analytics and beautiful dashboards.
+          
         </p>
         <div className="mt-12 flex items-center justify-center gap-4">
           {!isLoggedIn ? (

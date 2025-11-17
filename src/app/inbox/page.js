@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   ActivitySquare,
   Calendar,
+  Clock,
   CheckCircle2,
   Circle,
   ExternalLink,
@@ -121,18 +122,20 @@ function MentionCard({ post }) {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <PlatformBadge platform={platform} />
+        </div>
+        <div className="flex items-center gap-3">
           <span className={clsx('rounded-full border px-3 py-1 text-xs font-medium', underlineColor)}>
             {sentiment.charAt(0).toUpperCase() + sentiment.slice(1)}
           </span>
+          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-white">
+            <Users className="h-4 w-4 text-indigo-300" />
+            {brandName}
+          </span>
           <span className="flex items-center gap-2 text-sm text-gray-400">
-            <Circle className="h-2 w-2 fill-gray-500 text-gray-500" />
+            <Clock className="h-4 w-4 text-gray-500" />
             {formatRelative(createdAt)}
           </span>
         </div>
-        <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-white">
-          <Users className="h-4 w-4 text-indigo-300" />
-          {brandName}
-        </span>
       </div>
 
       <div className="space-y-3">

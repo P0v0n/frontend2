@@ -32,7 +32,7 @@ export function middleware(request) {
 
     if (!token) {
         if (process.env.NODE_ENV !== "production") {
-            console.log("❌ No token, redirecting to /auth/login");
+            console.log(" No token, redirecting to /auth/login");
         }
         return NextResponse.redirect(new URL("/auth/login", request.nextUrl.origin));
     }

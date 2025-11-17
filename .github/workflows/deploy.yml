@@ -1,0 +1,45 @@
+name: Deploy Frontend
+
+on:
+  push:
+    branches: [ dev-cs ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to server
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+            set -e
+            cd /home/deploy/frontend
+            echo "🧩 Marking directory as safe for git..."
+            git config --global --add safe.directory /home/deploy/frontend
+
+            echo "📦 Pulling latest code..."
+            git fetch origin dev-cs
+            git reset --hard origin/dev-cs
+
+            echo "📂 Installing dependencies..."
+            npm ci
+
+            echo "🏗️ Building production files..."
+            npm run build
+
+            echo "🚀 Restarting PM2 process..."
+            pm2 restart em_frontend-dev || pm2 start npm --name "em_frontend-dev" -- run start
+
+            echo "💾 Saving PM2 process list..."
+            pm2 save
+          EOF

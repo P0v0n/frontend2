@@ -28,9 +28,7 @@ export default function LandingPage() {
         <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight leading-tight">
           Social Monitoring Made Simple
         </h1>
-        <p className="mt-6 text-lg md:text-xl text-gray-300 max-w-3xl mx-auto">
-          
-        </p>
+        
         <div className="mt-12 flex items-center justify-center gap-4">
           {!isLoggedIn ? (
             <Link href="/auth/login" className="px-7 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 transition text-base font-semibold">

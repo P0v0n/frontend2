@@ -185,7 +185,7 @@ export default function DashboardLayout({ children }) {
           {/* Notification Bell */}
           <button className="flex flex-col items-center justify-center w-full py-2 text-gray-300 hover:bg-gray-800 hover:text-white rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50">
             <Bell className="w-6 h-6" />
-            <span className="text-xs mt-1 font-medium text-gray-300">Notifications</span>
+            <span className="text-xs mt-1 font-medium text-gray-300"></span>
           </button>
 
           {/* User Avatar with dropdown (same as top-right) */}

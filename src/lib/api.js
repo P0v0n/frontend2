@@ -290,6 +290,26 @@ export const api = {
       const p = new URLSearchParams({ ...(params || {}), _: String(Date.now()) });
       return apiRequest(`/api/data/user-posts?${p.toString()}`);
     },
+    
+    // Fetch/refresh data for a brand (GET request with query params)
+    // Required: email
+    // Optional: brandName, groupName, platform, keyword, startDate, endDate, limit, page
+    getData: (params) => {
+      const p = new URLSearchParams();
+      
+      // Add all provided parameters
+      if (params.email) p.append('email', params.email);
+      if (params.brandName) p.append('brandName', params.brandName);
+      if (params.groupName) p.append('groupName', params.groupName);
+      if (params.platform) p.append('platform', params.platform);
+      if (params.keyword) p.append('keyword', params.keyword);
+      if (params.startDate) p.append('startDate', params.startDate);
+      if (params.endDate) p.append('endDate', params.endDate);
+      if (params.limit) p.append('limit', params.limit);
+      if (params.page) p.append('page', params.page);
+      
+      return apiRequest(`/api/data/get-data/?${p.toString()}`);
+    },
   },
 
   // Channel configuration (proposed endpoints)

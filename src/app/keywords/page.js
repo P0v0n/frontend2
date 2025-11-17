@@ -1,5 +1,19 @@
 'use client';
 
+/**
+ * Keywords Configuration Page
+ * 
+ * This component manages keyword groups for brand monitoring across multiple platforms.
+ * 
+ * Error Handling Strategy:
+ * - All async operations have try-catch blocks
+ * - Errors are displayed to users via the resultMessage state
+ * - Failed operations don't crash the app - they show user-friendly messages
+ * 
+ * Recommended: Wrap this component with an Error Boundary at the layout level
+ * to catch any unexpected rendering errors.
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -148,6 +162,7 @@ export default function KeywordsPage() {
 const [brandKeywords, setBrandKeywords] = useState([]);
 const [keywordsLoading, setKeywordsLoading] = useState(false);
 const [keywordsError, setKeywordsError] = useState('');
+  const [operationLoading, setOperationLoading] = useState(null); // Track loading state for row operations: {rowId: 'deleting'|'duplicating'|'pausing'}
   const storageKeyForBrand = (brand) => `keywordGroups:${brand}`;
   const persistGroups = (brand, groups) => {
     setKeywordGroups(groups);
@@ -155,17 +170,27 @@ const [keywordsError, setKeywordsError] = useState('');
   };
   
   useEffect(() => {
+    let isMounted = true;
+    
     // Get current user info
-    try {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        setCurrentUser(user);
+    const loadUser = () => {
+      try {
+        const userStr = localStorage.getItem('user');
+        if (userStr && isMounted) {
+          const user = JSON.parse(userStr);
+          setCurrentUser(user);
+        }
+      } catch (e) {
+        // Silent fail - user will be redirected by middleware if needed
       }
-    } catch (e) {
-      console.error('Failed to get user from localStorage:', e);
-    }
+    };
+    
+    loadUser();
     fetchBrands();
+    
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Update brand data when brand changes
@@ -224,12 +249,12 @@ const [keywordsError, setKeywordsError] = useState('');
                   frequency: brand.frequency || '30m',
                   keywordGroups: keywordGroupsForBackend
                 }).catch(err => {
-                  console.warn('[KeywordsPage] Failed to sync keywordGroups to backend:', err);
+                  // Silent fail - will retry on next save
                 });
               }
             }
           } catch (err) {
-            console.warn('[KeywordsPage] Failed to load from localStorage:', err);
+            // Failed to load from localStorage - will use backend data
           }
         }
         
@@ -246,7 +271,7 @@ const [keywordsError, setKeywordsError] = useState('');
         const userStr = localStorage.getItem('user');
         if (userStr) user = JSON.parse(userStr);
       } catch (e) {
-        console.error('Failed to parse user from localStorage:', e);
+        // Silent fail - user authentication will be handled by middleware
       }
 
       // If user is admin, try to get all brands; fallback to user's assigned brands if access denied
@@ -256,7 +281,6 @@ const [keywordsError, setKeywordsError] = useState('');
           data = await api.brands.getAll();
         } catch (adminErr) {
           // If admin access fails, fallback to user-specific brands
-          console.warn('Admin access failed, falling back to user brands:', adminErr.message);
           if (user?.email) {
             data = await api.brands.getByUser(user.email);
           } else {
@@ -282,9 +306,8 @@ const [keywordsError, setKeywordsError] = useState('');
         }
       }
     } catch (err) {
-      console.error('Failed to load brands:', err);
       // Show error message to user
-      setResultMessage(`Failed to load brands: ${err.message}`);
+      setResultMessage(`⚠️ Failed to load brands: ${err.message}`);
     }
   };
 
@@ -313,7 +336,6 @@ const [keywordsError, setKeywordsError] = useState('');
       const response = await api.dashboard.getPosts(params);
       setBrandPosts(response?.data || []);
     } catch (err) {
-      console.error('Failed to load brand posts:', err);
       setPostsError(err.message || 'Failed to load posts');
       setBrandPosts([]);
     } finally {
@@ -334,7 +356,6 @@ const [keywordsError, setKeywordsError] = useState('');
       const response = await api.dashboard.getKeywords(selectedBrand);
       setBrandKeywords(response?.keywords || []);
     } catch (err) {
-      console.error('Failed to load brand keywords:', err);
       setKeywordsError(err.message || 'Failed to load keywords');
       setBrandKeywords([]);
     } finally {
@@ -355,7 +376,7 @@ const [keywordsError, setKeywordsError] = useState('');
       await fetchBrandPosts();
       await fetchBrandKeywords();
     } catch (e) {
-      console.error('Refresh failed', e);
+      setResultMessage('⚠️ Refresh failed. Please try again.');
     } finally {
       setRefreshing(false);
     }
@@ -382,28 +403,35 @@ const [keywordsError, setKeywordsError] = useState('');
 
   const handleSaveConfiguration = async () => {
     if (!selectedBrand) {
-      alert('Please select a brand');
+      setResultMessage('⚠️ Please select a brand');
       return;
     }
 
     if ((andKeywords.length + orKeywords.length) === 0) {
-      alert('Please add at least one keyword');
+      setResultMessage('⚠️ Please add at least one keyword');
       return;
     }
 
     if (configPlatforms.length === 0) {
-      alert('Please select at least one platform');
+      setResultMessage('⚠️ Please select at least one platform');
       return;
     }
 
     setConfigStatus('saving');
     try {
       const keywordsArray = Array.from(new Set([...andKeywords, ...orKeywords]));
-      // Map UI channel key(s) to backend platform(s)
+      
+      // Platform Mapping Logic:
+      // The UI supports 6 channels: twitter, facebook, instagram, youtube, reddit, quora
+      // The backend currently supports 3 platforms: twitter, youtube, reddit
+      // Mapping strategy:
+      // - youtube → youtube (direct mapping)
+      // - reddit, quora → reddit (both use Reddit API)
+      // - twitter, facebook, instagram → twitter (Twitter-like platforms)
       const platformsBackend = (configPlatforms || []).map(k => {
         if (k === 'youtube') return 'youtube';
         if (k === 'reddit' || k === 'quora') return 'reddit';
-        return 'twitter'; // twitter, facebook, instagram -> twitter
+        return 'twitter'; // twitter, facebook, instagram → twitter
       });
 
       // Build final keywords based on editing/new
@@ -437,7 +465,6 @@ const [keywordsError, setKeywordsError] = useState('');
       }));
 
       // Single backend update - include keywordGroups
-      console.log('[KeywordsPage] Sending keywordGroups to backend:', keywordGroupsForBackend);
       const configureResponse = await api.brands.configure({
         brandName: selectedBrand,
         keywords: finalKeywords,
@@ -445,10 +472,6 @@ const [keywordsError, setKeywordsError] = useState('');
         frequency: configFrequency,
         keywordGroups: keywordGroupsForBackend // Send keywordGroups to backend
       });
-
-      console.log('[KeywordsPage] Backend configure response:', configureResponse);
-      console.log('[KeywordsPage] Brand from response:', configureResponse?.brand);
-      console.log('[KeywordsPage] keywordGroups from response:', configureResponse?.brand?.keywordGroups);
 
       // Update local groups in localStorage (with full data including platforms, countries, languages)
       persistGroups(selectedBrand, updatedGroups);
@@ -465,7 +488,6 @@ const [keywordsError, setKeywordsError] = useState('');
         
         // Update keyword groups from backend response if available
         if (brand.keywordGroups && Array.isArray(brand.keywordGroups) && brand.keywordGroups.length > 0) {
-          console.log('[KeywordsPage] ✅ Found keywordGroups in backend response, count:', brand.keywordGroups.length);
           const backendGroups = brand.keywordGroups.map(group => ({
             name: group.name || '',
             keywords: Array.isArray(group.keywords) ? group.keywords : [],
@@ -477,16 +499,13 @@ const [keywordsError, setKeywordsError] = useState('');
             languages: Array.isArray(group.languages) ? group.languages : [],
             paused: group.paused || false
           }));
-          console.log('[KeywordsPage] Processed backend groups:', backendGroups);
           setKeywordGroups(backendGroups);
           persistGroups(selectedBrand, backendGroups);
         } else {
-          console.log('[KeywordsPage] ⚠️ No keywordGroups in backend response, using local updatedGroups');
           // If backend doesn't return keywordGroups in response, use our local updatedGroups
           setKeywordGroups(updatedGroups);
         }
       } else {
-        console.log('[KeywordsPage] ⚠️ No brand in response, using local updatedGroups');
         // Fallback: use our local updatedGroups if no brand in response
         setKeywordGroups(updatedGroups);
       }
@@ -505,7 +524,7 @@ const [keywordsError, setKeywordsError] = useState('');
       await fetchBrandPosts();
       await fetchBrandKeywords();
       
-      alert('✅ Configuration saved successfully!');
+      setResultMessage('✅ Configuration saved successfully!');
       setShowConfig(false);
       setEditingGroup(null);
       setGroupName('');
@@ -514,26 +533,25 @@ const [keywordsError, setKeywordsError] = useState('');
       setNotKeywords([]);
       setConfigStatus('');
     } catch (error) {
-      console.error('Configuration save failed:', error);
       setConfigStatus('error');
-      alert(`❌ Failed to save configuration: ${error.message}`);
+      setResultMessage(`❌ Failed to save configuration: ${error.message}`);
     }
   };
 
   const handleSubmit = async () => {
     if (!selectedBrand) {
-      alert("Please select a brand.");
+      setResultMessage("⚠️ Please select a brand.");
       return;
     }
 
     // Check if brand has configured keywords
     if (!selectedBrandData?.keywords || selectedBrandData.keywords.length === 0) {
-      alert("Please configure keywords for this brand first in Brand Management.");
+      setResultMessage("⚠️ Please configure keywords for this brand first in Brand Management.");
       return;
     }
 
     if (!selectedBrandData?.platforms || selectedBrandData.platforms.length === 0) {
-      alert("Please configure platforms for this brand first in Brand Management.");
+      setResultMessage("⚠️ Please configure platforms for this brand first in Brand Management.");
       return;
     }
 
@@ -563,7 +581,6 @@ const [keywordsError, setKeywordsError] = useState('');
       await fetchBrandKeywords();
       
     } catch (error) {
-      console.error('❌ Search failed:', error);
       setStatus("done");
       setResultMessage(`❌ Search failed: ${error.message}`);
     }
@@ -572,16 +589,6 @@ const [keywordsError, setKeywordsError] = useState('');
 
   // Build table rows from groups - only show user-created groups, no defaults
   // Fallback: if there are no saved groups yet, show a default group built from brand keywords
-  
-  // Debug: Log current state
-  console.log('[KeywordsPage RENDER] Current state:', {
-    selectedBrand,
-    keywordGroups,
-    keywordGroupsLength: keywordGroups?.length || 0,
-    selectedBrandData: selectedBrandData?.brandName,
-    selectedBrandDataKeywordGroups: selectedBrandData?.keywordGroups,
-  });
-  
   const groupsForDisplay = (keywordGroups && keywordGroups.length > 0)
     ? keywordGroups
     : [{
@@ -590,8 +597,6 @@ const [keywordsError, setKeywordsError] = useState('');
         platforms: Array.isArray(selectedBrandData?.platforms) ? selectedBrandData.platforms : [],
         paused: false,
       }];
-  
-  console.log('[KeywordsPage RENDER] groupsForDisplay:', groupsForDisplay);
   
   const keywordRows = groupsForDisplay.map((g, i) => {
     const keywords = Array.isArray(g.keywords) ? g.keywords : [];
@@ -623,20 +628,12 @@ const [keywordsError, setKeywordsError] = useState('');
     ? filteredRows
     : filteredRows.filter(r => (r.channels || []).some(ch => selectedFilterChannels.includes(ch)));
 
-  console.log('[KeywordsPage RENDER] Final filtered rows:', {
-    keywordRowsCount: keywordRows.length,
-    filteredRowsCount: filteredRows.length,
-    channelFilteredRowsCount: channelFilteredRows.length,
-    rows: channelFilteredRows.map(r => ({ groupName: r.groupName, keywords: r.keywords }))
-  });
-
   const handleCopyGroup = async (row) => {
     try {
       await navigator.clipboard.writeText(row.query);
-      alert('Copied to clipboard');
+      setResultMessage('✅ Copied to clipboard');
     } catch (e) {
-      console.error('Copy failed', e);
-      alert('Failed to copy');
+      setResultMessage('⚠️ Failed to copy to clipboard');
     }
   };
 
@@ -644,6 +641,8 @@ const [keywordsError, setKeywordsError] = useState('');
     if (!selectedBrandData) return;
     const ok = confirm(`Delete keyword group "${row.groupName}"?`);
     if (!ok) return;
+    
+    setOperationLoading(row.id);
     try {
       const updated = (selectedBrandData.keywords || []).filter(k => !(row.keywords || []).includes(k));
       const nextGroups = (keywordGroups || []).filter(g => g.name !== row.groupName);
@@ -668,10 +667,11 @@ const [keywordsError, setKeywordsError] = useState('');
       
       // Refresh brands to sync with backend
       await fetchBrands();
-      alert('✅ Group deleted successfully');
+      setResultMessage('✅ Group deleted successfully');
     } catch (e) {
-      console.error('Delete failed', e);
-      alert('Failed to delete');
+      setResultMessage('⚠️ Failed to delete group. Please try again.');
+    } finally {
+      setOperationLoading(null);
     }
   };
 
@@ -693,6 +693,7 @@ const [keywordsError, setKeywordsError] = useState('');
   };
 
   const handlePauseToggle = async (row) => {
+    setOperationLoading(row.id);
     try {
       const next = (keywordGroups || []).map(g => g.name === row.groupName ? { ...g, paused: !g.paused } : g);
       
@@ -714,13 +715,16 @@ const [keywordsError, setKeywordsError] = useState('');
       
       persistGroups(selectedBrand, next);
       setKeywordGroups(next); // Update state immediately
+      setResultMessage(`✅ Group ${next.find(g => g.name === row.groupName)?.paused ? 'paused' : 'resumed'} successfully`);
     } catch (e) {
-      console.error('Pause toggle failed', e);
-      alert('❌ Failed to update pause status');
+      setResultMessage('⚠️ Failed to update pause status. Please try again.');
+    } finally {
+      setOperationLoading(null);
     }
   };
 
   const handleDuplicateGroup = async (row) => {
+    setOperationLoading(row.id);
     try {
       const baseName = `${row.groupName} (copy)`;
       let newName = baseName;
@@ -757,9 +761,11 @@ const [keywordsError, setKeywordsError] = useState('');
       
       persistGroups(selectedBrand, nextGroups);
       setKeywordGroups(nextGroups); // Update state immediately
+      setResultMessage('✅ Group duplicated successfully');
     } catch (e) {
-      console.error('Duplicate failed', e);
-      alert('❌ Failed to duplicate group');
+      setResultMessage('⚠️ Failed to duplicate group. Please try again.');
+    } finally {
+      setOperationLoading(null);
     }
   };
 
@@ -771,6 +777,28 @@ const [keywordsError, setKeywordsError] = useState('');
         <div className="flex items-center gap-3 mb-3">
           <h1 className="text-[26px] font-semibold tracking-tight text-slate-100">Keywords Configuration</h1>
         </div>
+        
+        {/* Status/Result Message */}
+        {resultMessage && (
+          <div className={`mb-4 p-3 rounded-lg border ${
+            resultMessage.startsWith('✅') 
+              ? 'bg-green-900/20 border-green-700 text-green-300' 
+              : resultMessage.startsWith('⚠️') || resultMessage.startsWith('❌')
+              ? 'bg-red-900/20 border-red-700 text-red-300'
+              : 'bg-blue-900/20 border-blue-700 text-blue-300'
+          }`}>
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-sm whitespace-pre-line">{resultMessage}</p>
+              <button 
+                onClick={() => setResultMessage('')} 
+                className="text-gray-400 hover:text-white shrink-0"
+                aria-label="Dismiss message"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
         {/* Toolbar */}
         <div className="bg-black border border-white/10 rounded-lg p-3 mb-4 shadow-sm">
           <div className="flex flex-col md:flex-row md:items-center gap-3">
@@ -941,8 +969,20 @@ const [keywordsError, setKeywordsError] = useState('');
                     </td>
                     <td className="px-5 py-3 text-sm text-gray-300 relative">
                       <div className="flex items-center gap-3">
-                          <button onClick={()=>handlePauseToggle(row)} className="text-gray-200 hover:text-white border border-gray-700 px-3 py-1 rounded focus:outline-none focus:ring-2 focus:ring-white">{row.paused ? 'Resume' : 'Pause'}</button>
-                        <button onClick={()=> setOpenMenuId(openMenuId===row.id?null:row.id)} className="text-gray-400 hover:text-white w-8 h-8 rounded-md border border-gray-700 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-white">⋯</button>
+                          <button 
+                            onClick={()=>handlePauseToggle(row)} 
+                            disabled={operationLoading === row.id}
+                            className="text-gray-200 hover:text-white border border-gray-700 px-3 py-1 rounded focus:outline-none focus:ring-2 focus:ring-white disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {operationLoading === row.id ? 'Loading...' : (row.paused ? 'Resume' : 'Pause')}
+                          </button>
+                        <button 
+                          onClick={()=> setOpenMenuId(openMenuId===row.id?null:row.id)} 
+                          disabled={operationLoading === row.id}
+                          className="text-gray-400 hover:text-white w-8 h-8 rounded-md border border-gray-700 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-white disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          ⋯
+                        </button>
                       </div>
                       {openMenuId===row.id && (
                         <div className="absolute right-4 mt-2 w-44 bg-gray-900 border border-gray-800 rounded shadow-lg z-50">

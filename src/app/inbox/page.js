@@ -203,6 +203,20 @@ function MentionCard({ post }) {
 
 function MultiSelect({ options, value, onChange, label }) {
   const [open, setOpen] = useState(false);
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (e) => {
+      const target = e.target;
+      if (!target.closest('.brand-multi-select')) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+  
   const handleToggle = (option) => {
     if (option === '__all__') {
       onChange([]);
@@ -218,13 +232,15 @@ function MultiSelect({ options, value, onChange, label }) {
 
   const displayLabel =
     value.length === 0
-      ? 'All'
+      ? 'All Brands'
       : value.length === 1
       ? value[0]
-      : `${value.length} selected`;
+      : value.length === 2
+      ? value.join(', ')
+      : `${value.length} brands selected`;
 
   return (
-    <div className="relative">
+    <div className="relative brand-multi-select">
       <button
         onClick={() => setOpen((prev) => !prev)}
         className="inline-flex min-w-[180px] items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/10"
@@ -244,6 +260,7 @@ function MultiSelect({ options, value, onChange, label }) {
               className="text-indigo-300 transition hover:text-indigo-100"
               onClick={() => {
                 onChange([]);
+                setOpen(false);
               }}
             >
               Reset
@@ -252,13 +269,16 @@ function MultiSelect({ options, value, onChange, label }) {
           <ul className="max-h-64 space-y-1 overflow-y-auto pr-1 text-sm">
             <li>
               <button
-                onClick={() => handleToggle('__all__')}
+                onClick={() => {
+                  handleToggle('__all__');
+                  setOpen(false);
+                }}
                 className={clsx(
                   'flex w-full items-center justify-between rounded-lg px-3 py-2 text-left transition',
-                  value.length === 0 ? 'bg-indigo-500/20 text-indigo-100' : 'hover:bg-white/5',
+                  value.length === 0 ? 'bg-indigo-500/20 text-indigo-100 font-semibold' : 'hover:bg-white/5 text-gray-200',
                 )}
               >
-                All
+                All Brands
                 {value.length === 0 && <CheckCircle2 className="h-4 w-4 text-indigo-300" />}
               </button>
             </li>
@@ -267,7 +287,10 @@ function MultiSelect({ options, value, onChange, label }) {
               return (
                 <li key={option}>
                   <button
-                    onClick={() => handleToggle(option)}
+                    onClick={() => {
+                      handleToggle(option);
+                      setOpen(false);
+                    }}
                     className={clsx(
                       'flex w-full items-center justify-between rounded-lg px-3 py-2 text-left transition',
                       selected ? 'bg-indigo-500/20 text-indigo-100' : 'hover:bg-white/5 text-gray-200',
@@ -292,8 +315,22 @@ function DurationPicker({ value, onChange, timeRange, onTimeChange }) {
   const hours = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
   const minutes = ['00', '15', '30', '45'];
   const ampm = ['AM', 'PM'];
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (e) => {
+      const target = e.target;
+      if (!target.closest('.duration-picker')) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+  
   return (
-    <div className="relative">
+    <div className="relative duration-picker">
       <button
         onClick={() => setOpen((prev) => !prev)}
         className="inline-flex min-w-[180px] items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/10"
@@ -306,7 +343,7 @@ function DurationPicker({ value, onChange, timeRange, onTimeChange }) {
       </button>
 
       {open && (
-        <div className="absolute left-0 z-40 mt-2 w-[320px] rounded-xl border border-white/10 bg-[#080808] p-3 shadow-xl shadow-black/40">
+        <div className="absolute left-0 z-50 mt-2 w-[320px] rounded-xl border border-white/10 bg-[#080808] p-3 shadow-xl shadow-black/40">
           <ul className="space-y-1 text-sm mb-3">
             {DURATION_PRESETS.map((option) => (
               <li key={option.value}>
@@ -497,6 +534,32 @@ export default function InboxPage() {
   const [selectedChannels, setSelectedChannels] = useState([]);
   const [isChannelMenuOpen, setIsChannelMenuOpen] = useState(false);
 
+  // Close channel menu when clicking outside
+  useEffect(() => {
+    if (!isChannelMenuOpen) return;
+    const handleClickOutside = (e) => {
+      const target = e.target;
+      if (!target.closest('.channel-menu')) {
+        setIsChannelMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isChannelMenuOpen]);
+
+  // Close frequency menu when clicking outside
+  useEffect(() => {
+    if (!isFreqOpen) return;
+    const handleClickOutside = (e) => {
+      const target = e.target;
+      if (!target.closest('.freq-menu')) {
+        setIsFreqOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isFreqOpen]);
+
   useEffect(() => {
     if (loadings) return;
     if (!user?.email) {
@@ -548,7 +611,8 @@ export default function InboxPage() {
         setAssignedBrandDetails(assignedDetails);
         setAssignedBrandNames(assignedNames);
         setBrands(brandNames);
-        setSelectedBrands(assignedNames.length ? [assignedNames[0]] : []);
+        // Start with all brands visible (empty selection = show all)
+        setSelectedBrands([]);
 
         // Load mentions/posts (user endpoint with per-brand fallback)
         let postData = [];
@@ -753,12 +817,29 @@ export default function InboxPage() {
                 try {
                   setManualRefreshLoading(true);
                   setFreqMessage('Refreshing data…');
+                  
+                  // If no brands available, just call with email only
                   const targets = selectedBrands.length ? selectedBrands : brands;
-                  await Promise.all(
-                    targets.map((brandName) =>
-                      api.search.runForBrand({ brandName })
-                    )
-                  );
+                  
+                  if (targets.length === 0) {
+                    // No brands selected, fetch all user data
+                    await api.data.getData({ 
+                      email: user?.email,
+                      limit: 100
+                    });
+                  } else {
+                    // Fetch data for each brand
+                    await Promise.all(
+                      targets.map((brandName) =>
+                        api.data.getData({ 
+                          email: user?.email,
+                          brandName,
+                          limit: 100
+                        })
+                      )
+                    );
+                  }
+                  
                   setReloadKey((k) => k + 1);
                   setFreqMessage('Latest monitoring data fetched.');
                 } catch (err) {
@@ -767,13 +848,13 @@ export default function InboxPage() {
                   setManualRefreshLoading(false);
                 }
               }}
-              disabled={manualRefreshLoading || (!brands || brands.length === 0)}
+              disabled={manualRefreshLoading}
               className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/10 disabled:opacity-60"
             >
               <RefreshCcw className={`h-4 w-4 ${manualRefreshLoading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
-            <div className="relative">
+            <div className="relative channel-menu">
               <button
                 onClick={() => setIsChannelMenuOpen((v) => !v)}
                 className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/10"
@@ -786,7 +867,7 @@ export default function InboxPage() {
                 )}
               </button>
               {isChannelMenuOpen && (
-                <div className="absolute right-0 z-40 mt-2 w-48 rounded-xl border border-white/10 bg-[#080808] p-2 shadow-xl shadow-black/40">
+                <div className="absolute right-0 z-50 mt-2 w-48 rounded-xl border border-white/10 bg-[#080808] p-2 shadow-xl shadow-black/40">
                   <div className="flex items-center justify-between px-2 pb-2 text-xs uppercase tracking-widest text-gray-400">
                     <span>Select Channels</span>
                     <button
@@ -824,7 +905,7 @@ export default function InboxPage() {
                 </div>
               )}
             </div>
-            <div className="relative">
+            <div className="relative freq-menu">
               <button
                 onClick={() => setIsFreqOpen((v) => !v)}
                 className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/10"
@@ -833,7 +914,7 @@ export default function InboxPage() {
                 Filter
               </button>
               {isFreqOpen && (
-                <div className="absolute right-0 z-40 mt-2 w-56 rounded-xl border border-white/10 bg-[#080808] p-2 shadow-xl shadow-black/40">
+                <div className="absolute right-0 z-50 mt-2 w-56 rounded-xl border border-white/10 bg-[#080808] p-2 shadow-xl shadow-black/40">
                   <div className="px-2 pb-2 text-xs uppercase tracking-widest text-gray-400">Monitoring Frequency</div>
                   <ul className="space-y-1 text-sm">
                     {[
@@ -851,16 +932,34 @@ export default function InboxPage() {
                               setSavingFreq(true);
                               setFreqMessage('');
                               const targets = selectedBrands.length ? selectedBrands : brands;
-                              // Update frequency for each target brand
-                              await Promise.all(targets.map((brandName) =>
-                                api.brands.configure({ brandName, frequency: value })
-                              ));
-                              setFreqMessage(`Monitoring set to ${label.toLowerCase()}${selectedBrands.length ? '' : ' for all brands'}. Refreshing data…`);
+                              
+                              // Update frequency for each target brand (if any)
+                              if (targets.length > 0) {
+                                await Promise.all(targets.map((brandName) =>
+                                  api.brands.configure({ brandName, frequency: value })
+                                ));
+                                setFreqMessage(`Monitoring set to ${label.toLowerCase()}${selectedBrands.length ? '' : ' for all brands'}. Refreshing data…`);
+                              } else {
+                                setFreqMessage('No brands available to configure.');
+                              }
                               // Re-run search for updated brands, then refresh the feed
                               try {
-                                await Promise.all((selectedBrands.length ? selectedBrands : brands).map((b) =>
-                                  api.search.runForBrand({ brandName: b })
-                                ));
+                                const refreshTargets = selectedBrands.length ? selectedBrands : brands;
+                                if (refreshTargets.length === 0) {
+                                  // No brands, just fetch with email
+                                  await api.data.getData({ 
+                                    email: user?.email,
+                                    limit: 100
+                                  });
+                                } else {
+                                  await Promise.all(refreshTargets.map((b) =>
+                                    api.data.getData({ 
+                                      email: user?.email,
+                                      brandName: b,
+                                      limit: 100
+                                    })
+                                  ));
+                                }
                               } catch {}
                               setReloadKey((k) => k + 1);
                               setIsFreqOpen(false);
